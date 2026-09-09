@@ -26,6 +26,7 @@ import {
   PrimaryGeneratedColumn,
   RelationCount,
   UpdateDateColumn,
+  type Repository,
 } from 'typeorm';
 import Media from './Media';
 import SeasonRequest from './SeasonRequest';
@@ -51,6 +52,29 @@ export class MediaRequest {
     return requestLock.dispatch(requestBody.userId || user.id, () =>
       MediaRequest.createRequest(requestBody, user, options)
     );
+  }
+
+  private static async saveMediaDroppingTvdbIdOnConflict(
+    mediaRepository: Repository<Media>,
+    media: Media
+  ): Promise<void> {
+    try {
+      await mediaRepository.save(media);
+    } catch (e) {
+      if (!media.tvdbId) {
+        throw e;
+      }
+
+      logger.warn('Dropped TVDB ID after a conflict on save', {
+        label: 'Media Request',
+        tmdbId: media.tmdbId,
+        tvdbId: media.tvdbId,
+        errorMessage: e instanceof Error ? e.message : String(e),
+      });
+
+      media.tvdbId = undefined;
+      await mediaRepository.save(media);
+    }
   }
 
   private static async createRequest(
@@ -162,9 +186,27 @@ export class MediaRequest {
     });
 
     if (!media) {
+      let tvdbId = requestBody.tvdbId ?? tmdbMedia.external_ids.tvdb_id;
+
+      if (tvdbId) {
+        const conflict = await mediaRepository.findOne({ where: { tvdbId } });
+
+        if (conflict) {
+          logger.info(
+            'Skipped TVDB ID on new media, already owned by another media row',
+            {
+              label: 'Media Request',
+              tmdbId: tmdbMedia.id,
+              tvdbId,
+            }
+          );
+          tvdbId = undefined;
+        }
+      }
+
       media = new Media({
         tmdbId: tmdbMedia.id,
-        tvdbId: requestBody.tvdbId ?? tmdbMedia.external_ids.tvdb_id,
+        tvdbId,
         status: !requestBody.is4k ? MediaStatus.PENDING : MediaStatus.UNKNOWN,
         status4k: requestBody.is4k ? MediaStatus.PENDING : MediaStatus.UNKNOWN,
         mediaType: requestBody.mediaType,
@@ -319,7 +361,10 @@ export class MediaRequest {
     }
 
     if (requestBody.mediaType === MediaType.MOVIE) {
-      await mediaRepository.save(media);
+      await MediaRequest.saveMediaDroppingTvdbIdOnConflict(
+        mediaRepository,
+        media
+      );
 
       const request = new MediaRequest({
         type: MediaType.MOVIE,
@@ -434,7 +479,10 @@ export class MediaRequest {
         throw new QuotaRestrictedError('Series Quota exceeded.');
       }
 
-      await mediaRepository.save(media);
+      await MediaRequest.saveMediaDroppingTvdbIdOnConflict(
+        mediaRepository,
+        media
+      );
 
       const request = new MediaRequest({
         type: MediaType.TV,
