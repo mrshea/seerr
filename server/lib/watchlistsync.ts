@@ -1,5 +1,6 @@
 import PlexTvAPI from '@server/api/plextv';
 import { MediaStatus, MediaType } from '@server/constants/media';
+import { UserType } from '@server/constants/user';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
 import {
@@ -13,33 +14,30 @@ import {
 import { User } from '@server/entity/User';
 import logger from '@server/logger';
 import { Permission } from './permissions';
+import { getSettings } from './settings';
 
 class WatchlistSync {
   public async syncWatchlist() {
     const userRepository = getRepository(User);
 
-    // Get users who actually have plex tokens
+    // Include imported Plex users who have not signed in to Seerr.
     const users = await userRepository
       .createQueryBuilder('user')
       .addSelect('user.plexToken')
       .leftJoinAndSelect('user.settings', 'settings')
       .where("user.plexToken != ''")
+      .orWhere('user.userType = :userType', { userType: UserType.PLEX })
       .getMany();
 
+    const ownerToken = users.find((user) => user.id === 1)?.plexToken;
+    const ownerPlexTv = ownerToken ? new PlexTvAPI(ownerToken) : undefined;
+
     for (const user of users) {
-      await this.syncUserWatchlist(user);
+      await this.syncUserWatchlist(user, ownerPlexTv);
     }
   }
 
-  private async syncUserWatchlist(user: User) {
-    if (!user.plexToken) {
-      logger.warn('Skipping user watchlist sync for user without plex token', {
-        label: 'Plex Watchlist Sync',
-        user: user.displayName,
-      });
-      return;
-    }
-
+  private async syncUserWatchlist(user: User, ownerPlexTv?: PlexTvAPI) {
     if (
       !user.hasPermission(
         [
@@ -53,27 +51,37 @@ class WatchlistSync {
       return;
     }
 
-    if (
-      !user.settings?.watchlistSyncMovies &&
-      !user.settings?.watchlistSyncTv
-    ) {
+    const { defaultWatchlistSyncMovies, defaultWatchlistSyncTv } =
+      getSettings().main;
+    const watchlistSyncMovies =
+      user.settings?.watchlistSyncMovies ?? defaultWatchlistSyncMovies;
+    const watchlistSyncTv =
+      user.settings?.watchlistSyncTv ?? defaultWatchlistSyncTv;
+
+    if (!watchlistSyncMovies && !watchlistSyncTv) {
       // Skip sync if user settings have it disabled
       return;
     }
 
-    const plexTvApi = new PlexTvAPI(user.plexToken);
+    const items = user.plexToken
+      ? (await new PlexTvAPI(user.plexToken).getWatchlist({ size: 20 })).items
+      : user.userType === UserType.PLEX && user.plexId && ownerPlexTv
+        ? await ownerPlexTv.getSharedWatchlist(user.plexId)
+        : [];
 
-    const response = await plexTvApi.getWatchlist({ size: 20 });
+    if (!items.length) {
+      return;
+    }
 
     const mediaItems = await Media.getRelatedMedia(
       user,
-      response.items.map((i) => ({
+      items.map((i) => ({
         tmdbId: i.tmdbId,
         mediaType: i.type === 'show' ? MediaType.TV : MediaType.MOVIE,
       }))
     );
 
-    const watchlistTmdbIds = response.items.map((i) => i.tmdbId);
+    const watchlistTmdbIds = items.map((i) => i.tmdbId);
 
     const requestRepository = getRepository(MediaRequest);
     const existingAutoRequests: MediaRequest[] =
@@ -97,7 +105,7 @@ class WatchlistSync {
         .map((r) => `${r.media.mediaType}:${r.media.tmdbId}`)
     );
 
-    const unavailableItems = response.items.filter((i) => {
+    const unavailableItems = items.filter((i) => {
       const itemMediaType = i.type === 'show' ? MediaType.TV : MediaType.MOVIE;
 
       return (
@@ -129,13 +137,13 @@ class WatchlistSync {
             [Permission.AUTO_REQUEST, Permission.AUTO_REQUEST_MOVIE],
             { type: 'or' }
           ) ||
-            !user.settings?.watchlistSyncMovies) &&
+            !watchlistSyncMovies) &&
             mediaItem.type === 'movie') ||
           ((!user.hasPermission(
             [Permission.AUTO_REQUEST, Permission.AUTO_REQUEST_TV],
             { type: 'or' }
           ) ||
-            !user.settings?.watchlistSyncTv) &&
+            !watchlistSyncTv) &&
             mediaItem.type === 'show')
         ) {
           continue;

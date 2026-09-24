@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { before, beforeEach, describe, it, mock } from 'node:test';
+import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 
 import JellyfinAPI from '@server/api/jellyfin';
 import { MediaServerType } from '@server/constants/server';
@@ -88,6 +88,63 @@ async function loginAs(email: string, password: string) {
   assert.strictEqual(res.status, 200);
   return { agent, userId: res.body.id as number };
 }
+
+describe('User watchlist defaults', () => {
+  afterEach(() => {
+    getSettings().main.defaultWatchlistSyncMovies = false;
+    getSettings().main.defaultWatchlistSyncTv = false;
+  });
+
+  for (const [movies, tv] of [
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ]) {
+    it(`uses admin defaults (movies=${movies}, series=${tv}) for unset preferences`, async () => {
+      getSettings().main.defaultWatchlistSyncMovies = movies;
+      getSettings().main.defaultWatchlistSyncTv = tv;
+      const { agent, userId } = await loginAs('demo@seerr.dev', 'test1234');
+      const url = `/user/${userId}/settings/main`;
+
+      // Cover no settings record, a settings save, and persisted null preferences.
+      const initial = await agent.get(url);
+      const saved = await agent.post(url).send({ locale: 'en' });
+      const loaded = await agent.get(url);
+      for (const res of [initial, saved, loaded]) {
+        assert.strictEqual(res.status, 200);
+        assert.strictEqual(res.body.watchlistSyncMovies, movies);
+        assert.strictEqual(res.body.watchlistSyncTv, tv);
+      }
+
+      getSettings().main.defaultWatchlistSyncMovies = !movies;
+      getSettings().main.defaultWatchlistSyncTv = !tv;
+      const updated = await agent.get(url);
+      assert.strictEqual(updated.body.watchlistSyncMovies, !movies);
+      assert.strictEqual(updated.body.watchlistSyncTv, !tv);
+    });
+  }
+
+  it('allows users to opt out of inherited preferences', async () => {
+    getSettings().main.defaultWatchlistSyncMovies = true;
+    getSettings().main.defaultWatchlistSyncTv = true;
+    const { agent, userId } = await loginAs('demo@seerr.dev', 'test1234');
+
+    const saved = await agent.post(`/user/${userId}/settings/main`).send({
+      watchlistSyncMovies: false,
+      watchlistSyncTv: false,
+    });
+    const unrelated = await agent
+      .post(`/user/${userId}/settings/main`)
+      .send({ locale: 'en' });
+    const loaded = await agent.get(`/user/${userId}/settings/main`);
+    for (const res of [saved, unrelated, loaded]) {
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.body.watchlistSyncMovies, false);
+      assert.strictEqual(res.body.watchlistSyncTv, false);
+    }
+  });
+});
 
 describe('POST /user/:id/settings/linked-accounts/jellyfin/quickconnect', () => {
   beforeEach(() => {

@@ -250,6 +250,14 @@ components:
         defaultPermissions:
           type: number
           example: 32
+        defaultWatchlistSyncMovies:
+          type: boolean
+          default: false
+          description: Default movie watchlist auto-request preference when the user preference is unset. Auto-request permissions are still required.
+        defaultWatchlistSyncTv:
+          type: boolean
+          default: false
+          description: Default series watchlist auto-request preference when the user preference is unset. Auto-request permissions are still required.
         enableSpecialEpisodes:
           type: boolean
           example: false

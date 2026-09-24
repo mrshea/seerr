@@ -14,7 +14,7 @@ This feature is only available for Plex users. Local users cannot use the Watchl
 
 ## Prerequisites
 
-- You must have logged into Seerr at least once with your Plex account
+- You must either have signed into Seerr with Plex or have been imported by your administrator with a watchlist shared with the server owner
 - Your administrator must have granted you the necessary permissions
 - Your Plex account must have access to the Plex server configured in Seerr
 
@@ -28,13 +28,13 @@ Your administrator must grant you these permissions in your user profile:
 - **Auto-Request Movies** (for movie auto-requests)
 - **Auto-Request Series** (for TV series auto-requests)
 
-### User Activation (Required)
-You must enable the feature in your own profile settings:
+### User Preferences
+The following options control auto-request in your profile settings:
 - **Auto-Request Movies** toggle
 - **Auto-Request Series** toggle
 
-:::warning Two-Step Process
-Both administrator permissions AND user activation are required. Having permissions doesn't automatically enable the feature - you must also activate it in your profile.
+:::info
+Profile options are off by default. Administrators can enable defaults for users who have not saved their own preferences under **Settings > Users**, so those users do not need to turn them on individually. Auto-request permissions are still required. Imported users can skip signing into Seerr if their watchlist is shared with the server owner. Users can change their own preferences at any time.
 :::
 
 ## How to Enable
@@ -44,11 +44,13 @@ Contact your administrator to verify you have been granted:
 - `Auto-Request` permission
 - `Auto-Request Movies` and/or `Auto-Request Series` permissions
 
-### Step 2: Activate the Feature
+### Step 2: Activate the Feature (Unless Enabled by Your Administrator)
+If your administrator enabled the corresponding defaults and you have not saved a different preference, you can skip this step.
+
 1. Go to your user profile settings
 2. Navigate to the "General" section
 3. Find the "Auto-Request" options
-4. Enable the toggles for:
+4. Adjust the toggles for:
    - **Auto-Request Movies** - to automatically request movies from your watchlist
    - **Auto-Request Series** - to automatically request TV series from your watchlist
 
@@ -84,12 +86,27 @@ Auto-request only works for standard quality content. 4K content must be request
 ### Default Permissions
 - Go to **Settings** > **Users** > **Default Permissions**
 - Configure auto-request permissions for new users
-- This sets the default permissions but users still need to activate the feature individually
+- To skip individual profile activation, enable **Auto-Request Movies by Default** and/or **Auto-Request Series by Default** on the same page
+- Both options are off by default and apply to new and existing users whose corresponding profile preferences are unset
+- Explicitly saved user preferences take precedence over these defaults
+- Users still need the corresponding auto-request permissions
+
+### Imported Users Without a Seerr Sign-In
+
+1. Ensure the user has library access to the Plex server configured in Seerr
+2. Become Plex friends with the user using the Plex account linked to the Seerr owner
+3. Have the user make their watchlist visible to friends in their [Plex profile privacy settings](https://support.plex.tv/articles/profile/)
+4. Import the user from Plex on the **Users** page
+5. Grant the user auto-request permissions and enable the corresponding defaults under **Settings > Users**
+
+Seerr uses the owner's Plex token to read these shared watchlists and creates requests as the imported user. The user does not need to sign into Seerr, and Seerr does not need to be accessible outside your local network. Library access alone does not grant access to a user's watchlist. Private watchlists are skipped.
+
+Users who have already signed in continue to use their own Plex tokens. User preferences, request permissions, quotas, and approval requirements apply in both cases.
 
 ## Limitations
 
 - Local users cannot use this feature
 - 4K content requires manual requests
-- Users must have logged into Seerr with their Plex account
+- Users without a Plex sign-in must be imported and share their watchlist with the server owner
 - Respects user request limits and quotas
 - Won't request content already in your libraries

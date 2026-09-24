@@ -33,7 +33,11 @@ userSettingsRoutes.get<{ id: string }, UserSettingsGeneralResponse>(
   isOwnProfileOrAdmin(),
   async (req, res, next) => {
     const {
-      main: { defaultQuotas },
+      main: {
+        defaultQuotas,
+        defaultWatchlistSyncMovies,
+        defaultWatchlistSyncTv,
+      },
     } = getSettings();
     const userRepository = getRepository(User);
 
@@ -61,8 +65,10 @@ userSettingsRoutes.get<{ id: string }, UserSettingsGeneralResponse>(
         globalMovieQuotaLimit: defaultQuotas.movie.quotaLimit,
         globalTvQuotaDays: defaultQuotas.tv.quotaDays,
         globalTvQuotaLimit: defaultQuotas.tv.quotaLimit,
-        watchlistSyncMovies: user.settings?.watchlistSyncMovies,
-        watchlistSyncTv: user.settings?.watchlistSyncTv,
+        watchlistSyncMovies:
+          user.settings?.watchlistSyncMovies ?? defaultWatchlistSyncMovies,
+        watchlistSyncTv:
+          user.settings?.watchlistSyncTv ?? defaultWatchlistSyncTv,
       });
     } catch (e) {
       next({ status: 500, message: e.message });
@@ -75,6 +81,8 @@ userSettingsRoutes.post<
   UserSettingsGeneralResponse,
   UserSettingsGeneralResponse
 >('/main', isOwnProfileOrAdmin(), async (req, res, next) => {
+  const { defaultWatchlistSyncMovies, defaultWatchlistSyncTv } =
+    getSettings().main;
   const userRepository = getRepository(User);
 
   try {
@@ -134,8 +142,10 @@ userSettingsRoutes.post<
       user.settings.discoverRegion = req.body.discoverRegion;
       user.settings.streamingRegion = req.body.streamingRegion;
       user.settings.originalLanguage = req.body.originalLanguage;
-      user.settings.watchlistSyncMovies = req.body.watchlistSyncMovies;
-      user.settings.watchlistSyncTv = req.body.watchlistSyncTv;
+      user.settings.watchlistSyncMovies =
+        req.body.watchlistSyncMovies ?? user.settings.watchlistSyncMovies;
+      user.settings.watchlistSyncTv =
+        req.body.watchlistSyncTv ?? user.settings.watchlistSyncTv;
     }
 
     const savedUser = await userRepository.save(user);
@@ -146,8 +156,10 @@ userSettingsRoutes.post<
       discoverRegion: savedUser.settings?.discoverRegion,
       streamingRegion: savedUser.settings?.streamingRegion,
       originalLanguage: savedUser.settings?.originalLanguage,
-      watchlistSyncMovies: savedUser.settings?.watchlistSyncMovies,
-      watchlistSyncTv: savedUser.settings?.watchlistSyncTv,
+      watchlistSyncMovies:
+        savedUser.settings?.watchlistSyncMovies ?? defaultWatchlistSyncMovies,
+      watchlistSyncTv:
+        savedUser.settings?.watchlistSyncTv ?? defaultWatchlistSyncTv,
       email: savedUser.email,
     });
   } catch (e) {

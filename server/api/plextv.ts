@@ -98,6 +98,19 @@ interface UsersResponse {
   };
 }
 
+interface PlexCommunityResponse<T> {
+  data?: T;
+  errors?: { message: string }[];
+}
+
+interface PlexFriendsResponse {
+  allFriendsV2: { user: { id: string; username: string } }[];
+}
+
+interface PlexSharedWatchlistResponse {
+  userV2?: { watchlist?: { nodes: { id: string }[] } | null } | null;
+}
+
 interface WatchlistResponse {
   MediaContainer: {
     totalSize: number;
@@ -137,6 +150,7 @@ export interface PlexWatchlistCache {
 
 class PlexTvAPI extends ExternalAPI {
   private authToken: string;
+  private sharedWatchlistUsers?: Promise<Map<number, string>>;
 
   constructor(authToken: string) {
     super(
@@ -311,72 +325,17 @@ class PlexTvAPI extends ExternalAPI {
         );
       }
 
-      const watchlistDetails = await Promise.all(
+      const items = await this.getWatchlistItems(
         (cachedWatchlist?.response.MediaContainer.Metadata ?? []).map(
-          async (watchlistItem) => {
-            let detailedResponse: MetadataResponse;
-            try {
-              detailedResponse = await this.getRolling<MetadataResponse>(
-                `/library/metadata/${watchlistItem.ratingKey}`,
-                {
-                  baseURL: 'https://discover.provider.plex.tv',
-                }
-              );
-            } catch (e) {
-              if (e.response?.status === 404) {
-                logger.warn(
-                  `Item with ratingKey ${watchlistItem.ratingKey} not found, it may have been removed from the server.`,
-                  { label: 'Plex.TV Metadata API' }
-                );
-                return null;
-              } else {
-                throw e;
-              }
-            }
-
-            const metadata =
-              detailedResponse.MediaContainer.Metadata?.[0] ??
-              detailedResponse.MediaContainer.Video?.[0];
-
-            if (!metadata) {
-              logger.warn(
-                `Item with ratingKey ${watchlistItem.ratingKey} returned no metadata, skipping.`,
-                { label: 'Plex.TV Metadata API' }
-              );
-              return null;
-            }
-
-            const tmdbString = metadata.Guid?.find((guid) =>
-              guid.id.startsWith('tmdb')
-            );
-            const tvdbString = metadata.Guid?.find((guid) =>
-              guid.id.startsWith('tvdb')
-            );
-
-            return {
-              ratingKey: metadata.ratingKey,
-              // This should always be set? But I guess it also cannot be?
-              // We will filter out the 0's afterwards
-              tmdbId: tmdbString ? Number(tmdbString.id.split('//')[1]) : 0,
-              tvdbId: tvdbString
-                ? Number(tvdbString.id.split('//')[1])
-                : undefined,
-              title: metadata.title,
-              type: metadata.type,
-            };
-          }
+          (item) => item.ratingKey
         )
       );
-
-      const filteredList = watchlistDetails.filter(
-        (detail) => detail?.tmdbId
-      ) as PlexWatchlistItem[];
 
       return {
         offset,
         size,
         totalSize: cachedWatchlist?.response.MediaContainer.totalSize ?? 0,
-        items: filteredList,
+        items,
       };
     } catch (e) {
       logger.error('Failed to retrieve watchlist items', {
@@ -389,6 +348,154 @@ class PlexTvAPI extends ExternalAPI {
         totalSize: 0,
         items: [],
       };
+    }
+  }
+
+  private async getWatchlistItems(
+    ratingKeys: string[]
+  ): Promise<PlexWatchlistItem[]> {
+    const watchlistDetails = await Promise.all(
+      ratingKeys.map(async (ratingKey) => {
+        let detailedResponse: MetadataResponse;
+        try {
+          detailedResponse = await this.getRolling<MetadataResponse>(
+            `/library/metadata/${ratingKey}`,
+            {
+              baseURL: 'https://discover.provider.plex.tv',
+            }
+          );
+        } catch (e) {
+          if (e.response?.status === 404) {
+            logger.warn(
+              `Item with ratingKey ${ratingKey} not found, it may have been removed from the server.`,
+              { label: 'Plex.TV Metadata API' }
+            );
+            return null;
+          } else {
+            throw e;
+          }
+        }
+
+        const metadata =
+          detailedResponse.MediaContainer.Metadata?.[0] ??
+          detailedResponse.MediaContainer.Video?.[0];
+
+        if (!metadata) {
+          logger.warn(
+            `Item with ratingKey ${ratingKey} returned no metadata, skipping.`,
+            { label: 'Plex.TV Metadata API' }
+          );
+          return null;
+        }
+
+        const tmdbString = metadata.Guid?.find((guid) =>
+          guid.id.startsWith('tmdb')
+        );
+        const tvdbString = metadata.Guid?.find((guid) =>
+          guid.id.startsWith('tvdb')
+        );
+
+        return {
+          ratingKey: metadata.ratingKey,
+          // This should always be set? But I guess it also cannot be?
+          // We will filter out the 0's afterwards
+          tmdbId: tmdbString ? Number(tmdbString.id.split('//')[1]) : 0,
+          tvdbId: tvdbString ? Number(tvdbString.id.split('//')[1]) : undefined,
+          title: metadata.title,
+          type: metadata.type,
+        };
+      })
+    );
+
+    return watchlistDetails.filter(
+      (detail) => detail?.tmdbId
+    ) as PlexWatchlistItem[];
+  }
+
+  private async getSharedWatchlistUsers(): Promise<Map<number, string>> {
+    const machineId = getSettings().plex.machineId;
+    if (!machineId) {
+      return new Map();
+    }
+
+    const users = await this.getUsers();
+    const response = await this.axios.post<
+      PlexCommunityResponse<PlexFriendsResponse>
+    >(
+      'https://community.plex.tv/api',
+      { query: 'query { allFriendsV2 { user { id username } } }' },
+      { timeout: 10000 }
+    );
+    if (response.data.errors?.length || !response.data.data) {
+      throw new Error('Failed to retrieve Plex friends');
+    }
+
+    const friends = new Map(
+      response.data.data.allFriendsV2.map(({ user }) => [
+        user.username.toLowerCase(),
+        user.id,
+      ])
+    );
+    const sharedUsers = new Map<number, string>();
+    for (const user of users.MediaContainer.User ?? []) {
+      // Resolve the current username from the Plex account ID, not a stale
+      // imported username. Library access and friendship are separate in Plex.
+      const friendId = friends.get(user.$.username?.toLowerCase());
+      if (
+        friendId &&
+        user.Server?.some((server) => server.$.machineIdentifier === machineId)
+      ) {
+        sharedUsers.set(Number(user.$.id), friendId);
+      }
+    }
+    return sharedUsers;
+  }
+
+  public async getSharedWatchlist(
+    plexId: number
+  ): Promise<PlexWatchlistItem[]> {
+    try {
+      // Reuse the account lookup for this sync run, using only the owner's
+      // token. Do not cache private community responses across accounts.
+      this.sharedWatchlistUsers ??= this.getSharedWatchlistUsers();
+      const friendId = (await this.sharedWatchlistUsers).get(plexId);
+      if (!friendId) {
+        return [];
+      }
+
+      const response = await this.axios.post<
+        PlexCommunityResponse<PlexSharedWatchlistResponse>
+      >(
+        'https://community.plex.tv/api',
+        {
+          query: `query ($user: UserInput!, $first: PaginationInt!) {
+            userV2(user: $user) {
+              ... on User {
+                watchlist(first: $first) { nodes { id } }
+              }
+            }
+          }`,
+          variables: { user: { id: friendId }, first: 20 },
+        },
+        { timeout: 10000 }
+      );
+      if (response.data.errors?.length) {
+        throw new Error('Failed to retrieve shared Plex Watchlist');
+      }
+
+      // Plex omits watchlists that the owner is not allowed to view.
+      return await this.getWatchlistItems(
+        (response.data.data?.userV2?.watchlist?.nodes ?? []).map(
+          (item) => item.id
+        )
+      );
+    } catch (e) {
+      logger.debug('Failed to retrieve shared watchlist items', {
+        label: 'Plex.TV Metadata API',
+        plexId,
+        errorMessage: e.message,
+      });
+      return [];
     }
   }
 
