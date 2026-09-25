@@ -135,8 +135,7 @@ export interface MainSettings {
   applicationUrl: string;
   cacheImages: boolean;
   defaultPermissions: number;
-  defaultWatchlistSyncMovies: boolean;
-  defaultWatchlistSyncTv: boolean;
+  autoEnableWatchlistSync: boolean;
   defaultQuotas: {
     movie: Quota;
     tv: Quota;
@@ -415,8 +414,7 @@ class Settings {
         applicationUrl: '',
         cacheImages: false,
         defaultPermissions: Permission.REQUEST,
-        defaultWatchlistSyncMovies: false,
-        defaultWatchlistSyncTv: false,
+        autoEnableWatchlistSync: false,
         defaultQuotas: {
           movie: {},
           tv: {},

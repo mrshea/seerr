@@ -107,7 +107,7 @@ function showItem(tmdbId: number, title: string): PlexWatchlistItem {
   };
 }
 
-describe('WatchlistSync admin defaults', () => {
+describe('WatchlistSync automatic enablement', () => {
   beforeEach(async () => {
     requestCalls = [];
     watchlistItems = [movieItem(100, 'Movie'), showItem(200, 'Show')];
@@ -115,63 +115,42 @@ describe('WatchlistSync admin defaults', () => {
   });
 
   afterEach(() => {
-    getSettings().main.defaultWatchlistSyncMovies = false;
-    getSettings().main.defaultWatchlistSyncTv = false;
+    getSettings().main.autoEnableWatchlistSync = false;
   });
 
   const cases: {
     name: string;
-    movies: boolean;
-    tv: boolean;
+    enabled: boolean;
     permissions: Permission;
     expected: MediaType[];
   }[] = [
     {
-      name: 'does not auto-request when admin defaults are off',
-      movies: false,
-      tv: false,
+      name: 'does not auto-request when automatic enablement is off',
+      enabled: false,
       permissions: Permission.AUTO_REQUEST,
       expected: [],
     },
     {
-      name: 'auto-requests movies when only the movie default is enabled',
-      movies: true,
-      tv: false,
-      permissions: Permission.AUTO_REQUEST,
-      expected: [MediaType.MOVIE],
-    },
-    {
-      name: 'auto-requests series when only the series default is enabled',
-      movies: false,
-      tv: true,
-      permissions: Permission.AUTO_REQUEST,
-      expected: [MediaType.TV],
-    },
-    {
-      name: 'auto-requests both media types when both defaults are enabled',
-      movies: true,
-      tv: true,
+      name: 'auto-requests both media types when automatic enablement is on',
+      enabled: true,
       permissions: Permission.AUTO_REQUEST,
       expected: [MediaType.MOVIE, MediaType.TV],
     },
     {
       name: 'still requires auto-request permission',
-      movies: true,
-      tv: true,
+      enabled: true,
       permissions: Permission.REQUEST,
       expected: [],
     },
     {
       name: 'respects movie-only auto-request permission',
-      movies: true,
-      tv: true,
+      enabled: true,
       permissions: Permission.AUTO_REQUEST_MOVIE,
       expected: [MediaType.MOVIE],
     },
     {
       name: 'respects series-only auto-request permission',
-      movies: true,
-      tv: true,
+      enabled: true,
       permissions: Permission.AUTO_REQUEST_TV,
       expected: [MediaType.TV],
     },
@@ -179,8 +158,7 @@ describe('WatchlistSync admin defaults', () => {
 
   for (const testCase of cases) {
     it(testCase.name, async () => {
-      getSettings().main.defaultWatchlistSyncMovies = testCase.movies;
-      getSettings().main.defaultWatchlistSyncTv = testCase.tv;
+      getSettings().main.autoEnableWatchlistSync = testCase.enabled;
       await getRepository(User).update(2, {
         permissions: testCase.permissions,
       });
@@ -194,9 +172,8 @@ describe('WatchlistSync admin defaults', () => {
     });
   }
 
-  it('uses admin defaults for null preferences', async () => {
-    getSettings().main.defaultWatchlistSyncMovies = true;
-    getSettings().main.defaultWatchlistSyncTv = true;
+  it('automatically enables null preferences', async () => {
+    getSettings().main.autoEnableWatchlistSync = true;
     await getRepository(User).update(2, {
       permissions: Permission.AUTO_REQUEST,
     });
@@ -212,9 +189,8 @@ describe('WatchlistSync admin defaults', () => {
     );
   });
 
-  it('preserves per-media opt-outs with enabled admin defaults', async () => {
-    getSettings().main.defaultWatchlistSyncMovies = true;
-    getSettings().main.defaultWatchlistSyncTv = true;
+  it('preserves per-media opt-outs with automatic enablement', async () => {
+    getSettings().main.autoEnableWatchlistSync = true;
     await getRepository(User).update(2, {
       permissions: Permission.AUTO_REQUEST,
     });
@@ -244,8 +220,7 @@ describe('WatchlistSync imported users', () => {
   beforeEach(async () => {
     requestCalls = [];
     watchlistItems = [movieItem(100, 'Movie'), showItem(200, 'Show')];
-    getSettings().main.defaultWatchlistSyncMovies = true;
-    getSettings().main.defaultWatchlistSyncTv = true;
+    getSettings().main.autoEnableWatchlistSync = true;
     await getRepository(User).update(1, { permissions: Permission.NONE });
     await getRepository(User).update(2, {
       plexId: 42,
@@ -256,8 +231,49 @@ describe('WatchlistSync imported users', () => {
 
   afterEach(() => {
     mock.restoreAll();
-    getSettings().main.defaultWatchlistSyncMovies = false;
-    getSettings().main.defaultWatchlistSyncTv = false;
+    getSettings().main.autoEnableWatchlistSync = false;
+  });
+
+  it('stops imported-user sync when disabled, even with saved opt-ins', async () => {
+    const shared = mock.method(
+      PlexTvAPI.prototype,
+      'getSharedWatchlist',
+      async () => watchlistItems
+    );
+    await getRepository(UserSettings).save(
+      new UserSettings({
+        user: { id: 2 } as User,
+        watchlistSyncMovies: true,
+        watchlistSyncTv: true,
+      })
+    );
+
+    await watchlistSync.syncWatchlist();
+    assert.equal(shared.mock.callCount(), 1);
+    assert.equal(requestCalls.length, 2);
+
+    getSettings().main.autoEnableWatchlistSync = false;
+    requestCalls = [];
+    await watchlistSync.syncWatchlist();
+    assert.equal(shared.mock.callCount(), 1);
+    assert.deepEqual(requestCalls, []);
+  });
+
+  it('keeps existing personal-token sync working when disabled', async () => {
+    getSettings().main.autoEnableWatchlistSync = false;
+    await getRepository(User).update(2, { plexToken: 'personal-token' });
+    await getRepository(UserSettings).save(
+      new UserSettings({
+        user: { id: 2 } as User,
+        watchlistSyncMovies: true,
+        watchlistSyncTv: false,
+      })
+    );
+
+    await watchlistSync.syncWatchlist();
+    assert.deepEqual(requestCalls, [
+      { mediaId: 100, mediaType: MediaType.MOVIE, userId: 2 },
+    ]);
   });
 
   it('uses the owner token and attributes requests to the imported user', async () => {
@@ -307,7 +323,7 @@ describe('WatchlistSync imported users', () => {
   });
 
   for (const scenario of [
-    'defaults off',
+    'automatic enablement off',
     'no permission',
     'no owner token',
     'local user',
@@ -319,9 +335,8 @@ describe('WatchlistSync imported users', () => {
         'getSharedWatchlist',
         async () => watchlistItems
       );
-      if (scenario === 'defaults off') {
-        getSettings().main.defaultWatchlistSyncMovies = false;
-        getSettings().main.defaultWatchlistSyncTv = false;
+      if (scenario === 'automatic enablement off') {
+        getSettings().main.autoEnableWatchlistSync = false;
       } else if (scenario === 'no permission') {
         await getRepository(User).update(2, {
           permissions: Permission.REQUEST,

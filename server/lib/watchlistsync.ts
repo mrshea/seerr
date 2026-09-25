@@ -20,17 +20,25 @@ class WatchlistSync {
   public async syncWatchlist() {
     const userRepository = getRepository(User);
 
-    // Include imported Plex users who have not signed in to Seerr.
-    const users = await userRepository
+    const { autoEnableWatchlistSync } = getSettings().main;
+    const userQuery = userRepository
       .createQueryBuilder('user')
       .addSelect('user.plexToken')
       .leftJoinAndSelect('user.settings', 'settings')
-      .where("user.plexToken != ''")
-      .orWhere('user.userType = :userType', { userType: UserType.PLEX })
-      .getMany();
+      .where("user.plexToken != ''");
+
+    if (autoEnableWatchlistSync) {
+      userQuery.orWhere('user.userType = :userType', {
+        userType: UserType.PLEX,
+      });
+    }
+    const users = await userQuery.getMany();
 
     const ownerToken = users.find((user) => user.id === 1)?.plexToken;
-    const ownerPlexTv = ownerToken ? new PlexTvAPI(ownerToken) : undefined;
+    const ownerPlexTv =
+      autoEnableWatchlistSync && ownerToken
+        ? new PlexTvAPI(ownerToken)
+        : undefined;
 
     for (const user of users) {
       await this.syncUserWatchlist(user, ownerPlexTv);
@@ -51,12 +59,11 @@ class WatchlistSync {
       return;
     }
 
-    const { defaultWatchlistSyncMovies, defaultWatchlistSyncTv } =
-      getSettings().main;
+    const { autoEnableWatchlistSync } = getSettings().main;
     const watchlistSyncMovies =
-      user.settings?.watchlistSyncMovies ?? defaultWatchlistSyncMovies;
+      user.settings?.watchlistSyncMovies ?? autoEnableWatchlistSync;
     const watchlistSyncTv =
-      user.settings?.watchlistSyncTv ?? defaultWatchlistSyncTv;
+      user.settings?.watchlistSyncTv ?? autoEnableWatchlistSync;
 
     if (!watchlistSyncMovies && !watchlistSyncTv) {
       // Skip sync if user settings have it disabled
@@ -65,7 +72,10 @@ class WatchlistSync {
 
     const items = user.plexToken
       ? (await new PlexTvAPI(user.plexToken).getWatchlist({ size: 20 })).items
-      : user.userType === UserType.PLEX && user.plexId && ownerPlexTv
+      : autoEnableWatchlistSync &&
+          user.userType === UserType.PLEX &&
+          user.plexId &&
+          ownerPlexTv
         ? await ownerPlexTv.getSharedWatchlist(user.plexId)
         : [];
 

@@ -91,19 +91,12 @@ async function loginAs(email: string, password: string) {
 
 describe('User watchlist defaults', () => {
   afterEach(() => {
-    getSettings().main.defaultWatchlistSyncMovies = false;
-    getSettings().main.defaultWatchlistSyncTv = false;
+    getSettings().main.autoEnableWatchlistSync = false;
   });
 
-  for (const [movies, tv] of [
-    [false, false],
-    [true, false],
-    [false, true],
-    [true, true],
-  ]) {
-    it(`uses admin defaults (movies=${movies}, series=${tv}) for unset preferences`, async () => {
-      getSettings().main.defaultWatchlistSyncMovies = movies;
-      getSettings().main.defaultWatchlistSyncTv = tv;
+  for (const enabled of [false, true]) {
+    it(`uses automatic enablement (${enabled}) for unset preferences`, async () => {
+      getSettings().main.autoEnableWatchlistSync = enabled;
       const { agent, userId } = await loginAs('demo@seerr.dev', 'test1234');
       const url = `/user/${userId}/settings/main`;
 
@@ -113,21 +106,19 @@ describe('User watchlist defaults', () => {
       const loaded = await agent.get(url);
       for (const res of [initial, saved, loaded]) {
         assert.strictEqual(res.status, 200);
-        assert.strictEqual(res.body.watchlistSyncMovies, movies);
-        assert.strictEqual(res.body.watchlistSyncTv, tv);
+        assert.strictEqual(res.body.watchlistSyncMovies, enabled);
+        assert.strictEqual(res.body.watchlistSyncTv, enabled);
       }
 
-      getSettings().main.defaultWatchlistSyncMovies = !movies;
-      getSettings().main.defaultWatchlistSyncTv = !tv;
+      getSettings().main.autoEnableWatchlistSync = !enabled;
       const updated = await agent.get(url);
-      assert.strictEqual(updated.body.watchlistSyncMovies, !movies);
-      assert.strictEqual(updated.body.watchlistSyncTv, !tv);
+      assert.strictEqual(updated.body.watchlistSyncMovies, !enabled);
+      assert.strictEqual(updated.body.watchlistSyncTv, !enabled);
     });
   }
 
   it('allows users to opt out of inherited preferences', async () => {
-    getSettings().main.defaultWatchlistSyncMovies = true;
-    getSettings().main.defaultWatchlistSyncTv = true;
+    getSettings().main.autoEnableWatchlistSync = true;
     const { agent, userId } = await loginAs('demo@seerr.dev', 'test1234');
 
     const saved = await agent.post(`/user/${userId}/settings/main`).send({

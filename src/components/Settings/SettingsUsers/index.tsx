@@ -40,10 +40,9 @@ const messages = defineMessages('components.Settings.SettingsUsers', {
   tvRequestLimitLabel: 'Global Series Request Limit',
   defaultPermissions: 'Default Permissions',
   defaultPermissionsTip: 'Initial permissions assigned to new users',
-  defaultWatchlistSyncMovies: 'Auto-Request Movies by Default',
-  defaultWatchlistSyncTv: 'Auto-Request Series by Default',
-  defaultWatchlistSyncTip:
-    'Used when a user has not saved a Plex Watchlist preference; requires Auto-Request permission and either a Plex sign-in or a watchlist shared with the server owner',
+  autoEnableWatchlistSync: 'Automatically Enable Plex Watchlist Requests',
+  autoEnableWatchlistSyncTip:
+    'Automatically enable watchlist requests for permitted users. Imported Plex friends can sync shared watchlists without signing in to Seerr. Saved user preferences still apply',
   disabledMediaServerLoginWarning:
     'Some users may not have a {applicationTitle} password set. Disabling {mediaServerName} sign-in could lock them out. Affected users will need to set a password from their profile or via a password reset link.',
 });
@@ -119,9 +118,7 @@ const SettingsUsers = () => {
             tvQuotaLimit: data?.defaultQuotas.tv.quotaLimit ?? 0,
             tvQuotaDays: data?.defaultQuotas.tv.quotaDays ?? 7,
             defaultPermissions: data?.defaultPermissions ?? 0,
-            defaultWatchlistSyncMovies:
-              data?.defaultWatchlistSyncMovies ?? false,
-            defaultWatchlistSyncTv: data?.defaultWatchlistSyncTv ?? false,
+            autoEnableWatchlistSync: data?.autoEnableWatchlistSync ?? false,
           }}
           validationSchema={schema}
           enableReinitialize
@@ -142,8 +139,7 @@ const SettingsUsers = () => {
                   },
                 },
                 defaultPermissions: values.defaultPermissions,
-                defaultWatchlistSyncMovies: values.defaultWatchlistSyncMovies,
-                defaultWatchlistSyncTv: values.defaultWatchlistSyncTv,
+                autoEnableWatchlistSync: values.autoEnableWatchlistSync,
               });
               mutate('/api/v1/settings/public');
 
@@ -285,6 +281,29 @@ const SettingsUsers = () => {
                     />
                   </div>
                 </div>
+                {settings.currentSettings.mediaServerType ===
+                  MediaServerType.PLEX && (
+                  <div className="form-row">
+                    <label
+                      htmlFor="autoEnableWatchlistSync"
+                      className="checkbox-label"
+                    >
+                      {intl.formatMessage(messages.autoEnableWatchlistSync)}
+                      <span className="label-tip">
+                        {intl.formatMessage(
+                          messages.autoEnableWatchlistSyncTip
+                        )}
+                      </span>
+                    </label>
+                    <div className="form-input-area">
+                      <Field
+                        type="checkbox"
+                        name="autoEnableWatchlistSync"
+                        id="autoEnableWatchlistSync"
+                      />
+                    </div>
+                  </div>
+                )}
                 <div
                   role="group"
                   aria-labelledby="group-label"
@@ -309,53 +328,6 @@ const SettingsUsers = () => {
                     </div>
                   </div>
                 </div>
-                {settings.currentSettings.mediaServerType ===
-                  MediaServerType.PLEX && (
-                  <>
-                    <div className="form-row">
-                      <label
-                        htmlFor="defaultWatchlistSyncMovies"
-                        className="checkbox-label"
-                      >
-                        <span>
-                          {intl.formatMessage(
-                            messages.defaultWatchlistSyncMovies
-                          )}
-                        </span>
-                        <span className="label-tip">
-                          {intl.formatMessage(messages.defaultWatchlistSyncTip)}
-                        </span>
-                      </label>
-                      <div className="form-input-area">
-                        <Field
-                          type="checkbox"
-                          name="defaultWatchlistSyncMovies"
-                          id="defaultWatchlistSyncMovies"
-                        />
-                      </div>
-                    </div>
-                    <div className="form-row">
-                      <label
-                        htmlFor="defaultWatchlistSyncTv"
-                        className="checkbox-label"
-                      >
-                        <span>
-                          {intl.formatMessage(messages.defaultWatchlistSyncTv)}
-                        </span>
-                        <span className="label-tip">
-                          {intl.formatMessage(messages.defaultWatchlistSyncTip)}
-                        </span>
-                      </label>
-                      <div className="form-input-area">
-                        <Field
-                          type="checkbox"
-                          name="defaultWatchlistSyncTv"
-                          id="defaultWatchlistSyncTv"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
                 <div className="actions">
                   <div className="flex justify-end">
                     <span className="ml-3 inline-flex rounded-md shadow-sm">

@@ -33,11 +33,7 @@ userSettingsRoutes.get<{ id: string }, UserSettingsGeneralResponse>(
   isOwnProfileOrAdmin(),
   async (req, res, next) => {
     const {
-      main: {
-        defaultQuotas,
-        defaultWatchlistSyncMovies,
-        defaultWatchlistSyncTv,
-      },
+      main: { defaultQuotas, autoEnableWatchlistSync },
     } = getSettings();
     const userRepository = getRepository(User);
 
@@ -66,9 +62,9 @@ userSettingsRoutes.get<{ id: string }, UserSettingsGeneralResponse>(
         globalTvQuotaDays: defaultQuotas.tv.quotaDays,
         globalTvQuotaLimit: defaultQuotas.tv.quotaLimit,
         watchlistSyncMovies:
-          user.settings?.watchlistSyncMovies ?? defaultWatchlistSyncMovies,
+          user.settings?.watchlistSyncMovies ?? autoEnableWatchlistSync,
         watchlistSyncTv:
-          user.settings?.watchlistSyncTv ?? defaultWatchlistSyncTv,
+          user.settings?.watchlistSyncTv ?? autoEnableWatchlistSync,
       });
     } catch (e) {
       next({ status: 500, message: e.message });
@@ -81,8 +77,7 @@ userSettingsRoutes.post<
   UserSettingsGeneralResponse,
   UserSettingsGeneralResponse
 >('/main', isOwnProfileOrAdmin(), async (req, res, next) => {
-  const { defaultWatchlistSyncMovies, defaultWatchlistSyncTv } =
-    getSettings().main;
+  const { autoEnableWatchlistSync } = getSettings().main;
   const userRepository = getRepository(User);
 
   try {
@@ -157,9 +152,9 @@ userSettingsRoutes.post<
       streamingRegion: savedUser.settings?.streamingRegion,
       originalLanguage: savedUser.settings?.originalLanguage,
       watchlistSyncMovies:
-        savedUser.settings?.watchlistSyncMovies ?? defaultWatchlistSyncMovies,
+        savedUser.settings?.watchlistSyncMovies ?? autoEnableWatchlistSync,
       watchlistSyncTv:
-        savedUser.settings?.watchlistSyncTv ?? defaultWatchlistSyncTv,
+        savedUser.settings?.watchlistSyncTv ?? autoEnableWatchlistSync,
       email: savedUser.email,
     });
   } catch (e) {

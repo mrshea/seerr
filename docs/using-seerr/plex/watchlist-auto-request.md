@@ -34,7 +34,7 @@ The following options control auto-request in your profile settings:
 - **Auto-Request Series** toggle
 
 :::info
-Profile options are off by default. Administrators can enable defaults for users who have not saved their own preferences under **Settings > Users**, so those users do not need to turn them on individually. Auto-request permissions are still required. Imported users can skip signing into Seerr if their watchlist is shared with the server owner. Users can change their own preferences at any time.
+Profile options are off by default. Administrators can turn on **Automatically Enable Plex Watchlist Requests** under **Settings > Users** to enable requests for users who have not saved their own preferences. Existing auto-request permissions still control which media types each user can request. With this option enabled, imported Plex friends can sync shared watchlists without signing into Seerr. Saved user preferences still apply.
 :::
 
 ## How to Enable
@@ -45,7 +45,7 @@ Contact your administrator to verify you have been granted:
 - `Auto-Request Movies` and/or `Auto-Request Series` permissions
 
 ### Step 2: Activate the Feature (Unless Enabled by Your Administrator)
-If your administrator enabled the corresponding defaults and you have not saved a different preference, you can skip this step.
+If your administrator turned on **Automatically Enable Plex Watchlist Requests** and you have not saved a different preference, you can skip this step.
 
 1. Go to your user profile settings
 2. Navigate to the "General" section
@@ -86,10 +86,15 @@ Auto-request only works for standard quality content. 4K content must be request
 ### Default Permissions
 - Go to **Settings** > **Users** > **Default Permissions**
 - Configure auto-request permissions for new users
-- To skip individual profile activation, enable **Auto-Request Movies by Default** and/or **Auto-Request Series by Default** on the same page
-- Both options are off by default and apply to new and existing users whose corresponding profile preferences are unset
-- Explicitly saved user preferences take precedence over these defaults
-- Users still need the corresponding auto-request permissions
+
+### Automatically Enable Plex Watchlist Requests
+
+- Go to **Settings** > **Users** and turn on **Automatically Enable Plex Watchlist Requests**
+- This single option is off by default and applies to new and existing users
+- When enabled, users with unset profile preferences can automatically request the media types allowed by their existing **Auto-Request Movies** and **Auto-Request Series** permissions (or the master **Auto-Request** permission)
+- Imported Plex friends can also sync watchlists shared with the server owner without signing into Seerr
+- Explicitly saved user preferences still apply, including opt-outs
+- Turning this option off stops shared-watchlist sync for users without a Plex token, even if their profile preferences are enabled. Users who have signed in with Plex and enabled their profile preferences continue to sync as before
 
 ### Imported Users Without a Seerr Sign-In
 
@@ -97,7 +102,7 @@ Auto-request only works for standard quality content. 4K content must be request
 2. Become Plex friends with the user using the Plex account linked to the Seerr owner
 3. Have the user make their watchlist visible to friends in their [Plex profile privacy settings](https://support.plex.tv/articles/profile/)
 4. Import the user from Plex on the **Users** page
-5. Grant the user auto-request permissions and enable the corresponding defaults under **Settings > Users**
+5. Grant the user auto-request permissions and turn on **Automatically Enable Plex Watchlist Requests** under **Settings > Users**
 
 Seerr uses the owner's Plex token to read these shared watchlists and creates requests as the imported user. The user does not need to sign into Seerr, and Seerr does not need to be accessible outside your local network. Library access alone does not grant access to a user's watchlist. Private watchlists are skipped.
 
