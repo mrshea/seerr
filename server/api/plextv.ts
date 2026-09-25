@@ -274,6 +274,7 @@ class PlexTvAPI extends ExternalAPI {
     const response = await this.axios.get('/api/users', {
       transformResponse: [],
       responseType: 'text',
+      timeout: 10000,
     });
 
     const parsedXml = (await xml2js.parseStringPromise(

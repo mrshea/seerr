@@ -46,27 +46,21 @@ class WatchlistSync {
   }
 
   private async syncUserWatchlist(user: User, ownerPlexTv?: PlexTvAPI) {
-    if (
-      !user.hasPermission(
-        [
-          Permission.AUTO_REQUEST,
-          Permission.AUTO_REQUEST_MOVIE,
-          Permission.AUTO_REQUEST_TV,
-        ],
-        { type: 'or' }
-      )
-    ) {
-      return;
-    }
-
     const { autoEnableWatchlistSync } = getSettings().main;
     const watchlistSyncMovies =
-      user.settings?.watchlistSyncMovies ?? autoEnableWatchlistSync;
+      (user.settings?.watchlistSyncMovies ?? autoEnableWatchlistSync) &&
+      user.hasPermission(
+        [Permission.AUTO_REQUEST, Permission.AUTO_REQUEST_MOVIE],
+        { type: 'or' }
+      );
     const watchlistSyncTv =
-      user.settings?.watchlistSyncTv ?? autoEnableWatchlistSync;
+      (user.settings?.watchlistSyncTv ?? autoEnableWatchlistSync) &&
+      user.hasPermission(
+        [Permission.AUTO_REQUEST, Permission.AUTO_REQUEST_TV],
+        { type: 'or' }
+      );
 
     if (!watchlistSyncMovies && !watchlistSyncTv) {
-      // Skip sync if user settings have it disabled
       return;
     }
 
@@ -136,27 +130,15 @@ class WatchlistSync {
 
     for (const mediaItem of unavailableItems) {
       try {
-        if (mediaItem.type === 'show' && !mediaItem.tvdbId) {
-          throw new Error('Missing TVDB ID from Plex Metadata');
-        }
-
-        // Check if they have auto-request permissons and watchlist sync
-        // enabled for the media type
         if (
-          ((!user.hasPermission(
-            [Permission.AUTO_REQUEST, Permission.AUTO_REQUEST_MOVIE],
-            { type: 'or' }
-          ) ||
-            !watchlistSyncMovies) &&
-            mediaItem.type === 'movie') ||
-          ((!user.hasPermission(
-            [Permission.AUTO_REQUEST, Permission.AUTO_REQUEST_TV],
-            { type: 'or' }
-          ) ||
-            !watchlistSyncTv) &&
-            mediaItem.type === 'show')
+          (mediaItem.type === 'movie' && !watchlistSyncMovies) ||
+          (mediaItem.type === 'show' && !watchlistSyncTv)
         ) {
           continue;
+        }
+
+        if (mediaItem.type === 'show' && !mediaItem.tvdbId) {
+          throw new Error('Missing TVDB ID from Plex Metadata');
         }
 
         await MediaRequest.request(

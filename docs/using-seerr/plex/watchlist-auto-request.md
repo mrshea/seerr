@@ -110,6 +110,7 @@ Users who have already signed in continue to use their own Plex tokens. User pre
 
 ## Limitations
 
+- Each sync checks up to 20 entries from each user's watchlist
 - Local users cannot use this feature
 - 4K content requires manual requests
 - Users without a Plex sign-in must be imported and share their watchlist with the server owner

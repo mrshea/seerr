@@ -160,7 +160,7 @@ describe('WatchlistSync automatic enablement', () => {
     it(testCase.name, async () => {
       getSettings().main.autoEnableWatchlistSync = testCase.enabled;
       await getRepository(User).update(2, {
-        permissions: testCase.permissions,
+        permissions: Permission.REQUEST | testCase.permissions,
       });
 
       await watchlistSync.syncWatchlist();
@@ -225,7 +225,7 @@ describe('WatchlistSync imported users', () => {
     await getRepository(User).update(2, {
       plexId: 42,
       plexToken: '',
-      permissions: Permission.AUTO_REQUEST,
+      permissions: Permission.REQUEST | Permission.AUTO_REQUEST,
     });
   });
 
@@ -300,13 +300,13 @@ describe('WatchlistSync imported users', () => {
   });
 
   it('retains media permissions and explicit opt-outs for imported users', async () => {
-    mock.method(
+    const shared = mock.method(
       PlexTvAPI.prototype,
       'getSharedWatchlist',
       async () => watchlistItems
     );
     await getRepository(User).update(2, {
-      permissions: Permission.AUTO_REQUEST_MOVIE,
+      permissions: Permission.REQUEST | Permission.AUTO_REQUEST_MOVIE,
     });
 
     await watchlistSync.syncWatchlist();
@@ -320,6 +320,11 @@ describe('WatchlistSync imported users', () => {
     );
     await watchlistSync.syncWatchlist();
     assert.deepEqual(requestCalls, []);
+    assert.equal(
+      shared.mock.callCount(),
+      1,
+      'Do not fetch when no permitted media type is enabled'
+    );
   });
 
   for (const scenario of [
@@ -377,7 +382,7 @@ describe('WatchlistSync imported users', () => {
         avatar: '',
         plexToken: 'personal-token',
         userType: UserType.PLEX,
-        permissions: Permission.AUTO_REQUEST,
+        permissions: Permission.REQUEST | Permission.AUTO_REQUEST,
       })
     );
 

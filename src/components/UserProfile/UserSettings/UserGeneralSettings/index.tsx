@@ -180,8 +180,14 @@ const UserGeneralSettings = () => {
               movieQuotaDays: movieQuotaEnabled ? values.movieQuotaDays : null,
               tvQuotaLimit: tvQuotaEnabled ? values.tvQuotaLimit : null,
               tvQuotaDays: tvQuotaEnabled ? values.tvQuotaDays : null,
-              watchlistSyncMovies: values.watchlistSyncMovies,
-              watchlistSyncTv: values.watchlistSyncTv,
+              watchlistSyncMovies:
+                values.watchlistSyncMovies !== data.watchlistSyncMovies
+                  ? values.watchlistSyncMovies
+                  : undefined,
+              watchlistSyncTv:
+                values.watchlistSyncTv !== data.watchlistSyncTv
+                  ? values.watchlistSyncTv
+                  : undefined,
             });
 
             if (currentUser?.id === user?.id && setLocale) {
